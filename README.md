@@ -1,120 +1,67 @@
-# UOK Connect
+# Information Security Project
 
-🔗 **[Live Demo / Deployed App](https://student-project-portal-mu6m.vercel.app/)**
+## Overview
 
-> An academic project serving as a student portfolio showcase portal for the University of Kelaniya.
+This is an individual Information Security project based on the Stall Booking System developed as part of the Web Development domain.
 
-**UOK Connect** bridges the gap between students and the industry. It allows students to publish their academic and personal projects, while recruiters can easily discover emerging tech talent. 
+The project focuses on identifying security vulnerabilities in the existing application, implementing appropriate security improvements, and integrating secure authentication using an external Identity Provider (IdP).
 
-## 🚀 Tech Stack
+## Objectives
 
-- **Frontend**: React 18, Vite, Tailwind CSS v4, Zustand (State Management)
-  - *Libraries:* React Hook Form + Zod (Form Validation), Framer Motion (Animations), Axios, React Router v7
-- **Backend**: Node.js, Express 5, Passport.js (Google OAuth 2.0)
-  - *Libraries:* Helmet & express-rate-limit (Security), express-validator, JWT & bcryptjs (Auth), cookie-parser
-- **Database**: PostgreSQL (hosted on Neon), `connect-pg-simple` (Session Store)
-- **File Storage**: Cloudinary (Image CDN), Multer (In-memory uploads)
-- **Deployment**: Vercel (Frontend & Backend)
+- Identify existing security vulnerabilities.
+- Remove or mitigate identified vulnerabilities.
+- Improve authentication and authorization.
+- Integrate an external Identity Provider.
+- Apply secure coding practices.
+- Document the implemented security improvements.
+- Explain the changes and implementation process through a Medium blog.
 
-## ✨ Key Features & Engineering Decisions
+## Security Improvements
 
-- **Role-Based Access Control**: Tailored workflows and UI/UX for Students, Recruiters, and Admins.
-- **Secure Authentication**: Implemented Single Sign-On (SSO) using Google OAuth 2.0 with session tokens stored in secure, `HTTP-only` cookies to prevent XSS attacks.
-- **Optimized Image Processing**: Utilized Multer for in-memory uploads, streaming buffers directly to Cloudinary without writing to the local disk, improving performance and deployment compatibility.
-- **Asynchronous Event Architecture**: Decoupled core request logic from side-effects (like generating notifications) using Node's native `EventEmitter`, ensuring fast API response times.
+The following areas will be reviewed and improved:
 
-## 🏗 System Architecture
+- Authentication and authorization
+- Input validation
+- SQL injection prevention
+- Cross-Site Scripting (XSS) prevention
+- Secure session management
+- Password and credential security
+- Sensitive data protection
+- API security
+- Dependency vulnerabilities
+- Environment variable and secret management
 
-```mermaid
-graph TD
-    %% User Interaction
-    User((User / Browser)) -->|Interacts| ClientApp
+## Authentication
 
-    %% Frontend Layer
-    subgraph Frontend [Client - React / Vite]
-        ClientApp[React Components / Pages]
-        StateStore[Zustand State Management]
-        Axios[Axios API Client]
-        ClientApp <--> StateStore
-        ClientApp <--> Axios
-    end
+An external Identity Provider will be integrated into the application.
 
-    %% Backend Layer
-    subgraph Backend [Server - Node.js / Express]
-        Router(Express Router)
-        AuthMiddleware[Passport.js / Auth Middleware]
-        UploadMiddleware[Multer Memory Storage]
-        Controllers[API Controllers]
-        EventEmitter[Node EventEmitter]
-        
-        Router --> AuthMiddleware
-        Router --> UploadMiddleware
-        Router --> Controllers
-        Controllers -.->|Emits async events| EventEmitter
-    end
+**Identity Provider:** [To be updated]
 
-    %% External Services
-    subgraph External [External Services]
-        Google[Google OAuth 2.0 API]
-        Cloudinary[Cloudinary Storage / CDN]
-    end
+The authentication implementation will use an appropriate standard such as OAuth 2.0 / OpenID Connect where applicable.
 
-    %% Database Layer
-    subgraph DB [Database Layer]
-        Postgres[(PostgreSQL)]
-        SessionStore[(connect-pg-simple Session Store)]
-    end
+## Technologies
 
-    %% Connections across layers
-    Axios <-->|REST API JSON \n HTTP/Cookies| Router
-    
-    AuthMiddleware <-->|OAuth Flow| Google
-    AuthMiddleware <-->|Manage Sessions| SessionStore
-    AuthMiddleware <-->|Verify/Create Users| Postgres
+- Frontend: [Add technology]
+- Backend: [Add technology]
+- Database: [Add database]
+- Authentication: [Add Identity Provider]
+- Version Control: Git & GitHub
 
-    UploadMiddleware -->|Passes req.file.buffer| Controllers
-    Controllers -->|Pipes Image Buffer| Cloudinary
-    Cloudinary -.->|Returns Secure Image URL| Controllers
+## Installation and Setup
 
-    Controllers <-->|CRUD Operations| Postgres
-    EventEmitter -->|Async writes notifications| Postgres
-    
-    %% Force External Services to be on the same level as Database Layer
-    EventEmitter ~~~ Google
-    EventEmitter ~~~ Cloudinary
-    
-    %% Styling
-    classDef frontend fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000;
-    classDef backend fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#000000;
-    classDef database fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#000000;
-    classDef external fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#000000;
-    
-    class ClientApp,StateStore,Axios frontend;
-    class Router,AuthMiddleware,UploadMiddleware,Controllers,EventEmitter backend;
-    class Postgres,SessionStore database;
-    class Google,Cloudinary external;
-```
+Setup instructions will be added after completing the security improvements and authentication integration.
 
-## 💻 Local Setup
+## Security Testing
 
-### 1. Environment Configuration
-Create `.env` files in both the `client/` and `server/` directories using the provided templates.
-- **Server (`server/.env`)**: Requires your Neon PostgreSQL URL, Google OAuth credentials, and Cloudinary API keys.
-- **Client (`client/.env`)**: Set `VITE_API_URL=http://localhost:5001`.
+The application will be tested to verify that the identified vulnerabilities have been addressed and that the implemented security controls work as expected.
 
-### 2. Start the Application
+## Documentation
 
-**Run the Backend (Port 5001):**
-```bash
-cd server
-npm install
-npm run db:setup  # Initializes the Neon PostgreSQL tables
-npm run dev
-```
+A Medium blog will be published explaining the security vulnerabilities identified, the solutions implemented, and the authentication integration process.
 
-**Run the Frontend (Port 5173):**
-```bash
-cd client
-npm install
-npm run dev
-```
+## Author
+
+**Anushka Dilinuwan Wijesinghe**
+
+BSc (Hons) in Software Engineering  
+University of Kelaniya

@@ -1,5 +1,7 @@
 const express = require('express');
 const passport = require('passport');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
@@ -19,41 +21,36 @@ const {
 
 const router = express.Router();
 
-// ── Google OAuth — Student ────────────────────────────────────────────────────
-// Sets state='student' so the strategy knows to create a student account for new users
-router.get('/google/student', (req, res, next) => {
+// ── Anti-CSRF Helper ──────────────────────────────────────────────────────────
+const startGoogleOAuth = (req, res, next, role) => {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const stateToken = jwt.sign({ role, nonce }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  
+  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+  res.cookie('oauth_nonce', nonce, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax', // must be lax so it's sent on top-level navigation from Google
+    maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+
   passport.authenticate('google', {
     scope: ['profile', 'email'],
-    state: 'student',
+    state: stateToken,
     session: false,
   })(req, res, next);
-});
+};
+
+// ── Google OAuth — Student ────────────────────────────────────────────────────
+router.get('/google/student', (req, res, next) => startGoogleOAuth(req, res, next, 'student'));
 
 // ── Google OAuth — Recruiter ──────────────────────────────────────────────────
-router.get('/google/recruiter', (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'recruiter',
-    session: false,
-  })(req, res, next);
-});
+router.get('/google/recruiter', (req, res, next) => startGoogleOAuth(req, res, next, 'recruiter'));
 
 // ── Google OAuth — Login (existing users only, any role) ─────────────────────
-// Used from the login page. Does NOT create new accounts.
-router.get('/google/login', (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'login',
-    session: false,
-  })(req, res, next);
-});
+router.get('/google/login', (req, res, next) => startGoogleOAuth(req, res, next, 'login'));
 
 // ── Google OAuth — Admin (existing DB admin only) ─────────────────────────────
-// Step 1: POST /auth/admin/verify-key  → validates secret key, returns adminFlowToken
-// Step 2: GET  /auth/admin/google?t=TOKEN  → verifies token, initiates OAuth with state='admin'
-// Step 3: Google redirects to /auth/google/callback with state='admin'
-// The Passport strategy only succeeds if the Google account is already in DB with role='admin'
-
 router.post(
   '/admin/verify-key',
   [body('secretKey').trim().notEmpty().withMessage('Secret key is required.')],
@@ -61,13 +58,7 @@ router.post(
   validateAdminKey
 );
 
-router.get('/admin/google', requireAdminFlowToken, (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'admin',
-    session: false,
-  })(req, res, next);
-});
+router.get('/admin/google', requireAdminFlowToken, (req, res, next) => startGoogleOAuth(req, res, next, 'admin'));
 
 // ── Shared Google callback (all flows) ───────────────────────────────────────
 // All Google OAuth flows return here.  The `state` query param tells the callback

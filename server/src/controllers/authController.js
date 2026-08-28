@@ -39,6 +39,13 @@ const handleGoogleCallback = async (req, res, next) => {
     audience: 'oauth_exchange',
   });
 
+  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+  res.clearCookie('oauth_nonce', {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax'
+  });
+
   const redirectUrl = `${process.env.CLIENT_URL}/oauth-success?code=${exchangeToken}`;
   return res.redirect(redirectUrl);
 };

@@ -1,3 +1,4 @@
+const xss = require('xss');
 const pool = require('../config/db');
 const emitter = require('../events/eventEmitter');
 
@@ -66,6 +67,8 @@ const createComment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Comment content is required.' });
     }
 
+    const safeContent = xss(content.trim());
+
     const projectResult = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
     if (!projectResult.rows.length) {
       return res.status(404).json({ success: false, message: 'Project not found.' });
@@ -77,14 +80,14 @@ const createComment = async (req, res) => {
     const insertResult = await pool.query(
       `INSERT INTO notifications (recipient_id, actor_id, project_id, type, message, is_private)
        VALUES ($1, $2, $3, 'comment', $4, $5) RETURNING *`,
-      [project.user_id, req.user.id, project.id, content.trim(), isPrivate]
+      [project.user_id, req.user.id, project.id, safeContent, isPrivate]
     );
 
     const notification = insertResult.rows[0];
 
     const comment = {
       id: notification.id,
-      content: content.trim(),
+      content: safeContent,
       is_private: isPrivate,
       author_name: req.user.name,
       author_pic: req.user.profile_pic,

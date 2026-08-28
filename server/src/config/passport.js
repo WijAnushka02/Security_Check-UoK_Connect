@@ -1,5 +1,6 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const jwt = require('jsonwebtoken');
 const pool = require('./db');
 const emitter = require('../events/eventEmitter');
 
@@ -31,8 +32,25 @@ passport.use(
         const name = profile.displayName;
         const profilePic = profile.photos?.[0]?.value || null;
 
-        // State is set by our initiation routes and returned unchanged by Google
-        const state = req.query?.state || 'recruiter';
+        const stateToken = req.query?.state;
+        const cookieNonce = req.cookies?.oauth_nonce;
+
+        if (!stateToken || !cookieNonce) {
+          return done(null, false, { message: 'OAuth state missing. Possible CSRF.' });
+        }
+
+        let decodedState;
+        try {
+          decodedState = jwt.verify(stateToken, process.env.JWT_SECRET);
+        } catch (err) {
+          return done(null, false, { message: 'Invalid or expired OAuth state.' });
+        }
+
+        if (decodedState.nonce !== cookieNonce) {
+          return done(null, false, { message: 'OAuth state mismatch. CSRF detected.' });
+        }
+
+        const state = decodedState.role || 'recruiter';
 
         // Existing user 
         const result = await pool.query(

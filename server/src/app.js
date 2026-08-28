@@ -12,6 +12,7 @@ const pool = require('./config/db');
 
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
+const { doubleCsrfProtection, generateToken, invalidCsrfTokenError } = require('./middleware/csrf');
 const userRoutes = require('./routes/users');
 const notificationRoutes = require('./routes/notifications');
 
@@ -56,6 +57,16 @@ app.use(cookieParser());
 
 app.use(passport.initialize());
 
+// ── CSRF Token Endpoint ───────────────────────────────────────────────────────
+app.get('/api/auth/csrf-token', (req, res) => {
+  return res.json({
+    token: generateToken(res, req)
+  });
+});
+
+// Apply CSRF protection to all API routes (except the csrf-token endpoint itself)
+app.use('/api', doubleCsrfProtection);
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
@@ -76,6 +87,13 @@ app.use((req, res) =>
 
 // Global error handler
 app.use((err, req, res, next) => {
+  if (err === invalidCsrfTokenError) {
+    return res.status(403).json({
+      success: false,
+      message: 'invalid csrf token',
+    });
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     console.error('[Error]', err.message);
   } else {

@@ -1,3 +1,4 @@
+const xss = require('xss');
 const pool = require('../config/db');
 const emitter = require('../events/eventEmitter');
 
@@ -172,6 +173,9 @@ const updateProfile = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name is required.' });
     }
 
+    const safeName = xss(name.trim());
+    const safeStudentId = student_id ? xss(student_id.trim()) : null;
+
     // Fetch user to check role
     const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
     if (!userResult.rows.length) {
@@ -179,21 +183,21 @@ const updateProfile = async (req, res) => {
     }
     const userRole = userResult.rows[0].role;
 
-    if (userRole === 'student' && student_id) {
-       const existing = await pool.query('SELECT id FROM users WHERE student_id = $1 AND id != $2', [student_id, userId]);
+    if (userRole === 'student' && safeStudentId) {
+       const existing = await pool.query('SELECT id FROM users WHERE student_id = $1 AND id != $2', [safeStudentId, userId]);
        if (existing.rows.length) {
          return res.status(400).json({ success: false, message: 'Student ID is already registered to another user.' });
        }
     }
 
-    const finalStudentId = userRole === 'student' ? (student_id || null) : null;
+    const finalStudentId = userRole === 'student' ? safeStudentId : null;
 
     const result = await pool.query(
       `UPDATE users 
        SET name = $1, student_id = $2
        WHERE id = $3
        RETURNING id, name, email, profile_pic, role, student_id, created_at`,
-      [name.trim(), finalStudentId, userId]
+      [safeName, finalStudentId, userId]
     );
 
     res.json({ success: true, message: 'Profile updated successfully.', user: result.rows[0] });

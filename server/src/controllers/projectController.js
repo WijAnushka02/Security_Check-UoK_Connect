@@ -1,3 +1,4 @@
+const xss = require('xss');
 const pool = require('../config/db');
 const cloudinary = require('../config/cloudinary');
 const emitter = require('../events/eventEmitter');
@@ -138,6 +139,14 @@ const createProject = async (req, res) => {
   const client = await pool.connect();
   try {
     const { title, description, github_url, demo_url, tech_stack, tags, status } = req.body;
+    
+    // Sanitize inputs
+    const safeTitle = xss(title);
+    const safeDescription = xss(description);
+    const safeGithubUrl = github_url ? xss(github_url) : null;
+    const safeDemoUrl = demo_url ? xss(demo_url) : null;
+    const safeStatus = status ? xss(status) : 'published';
+
     let thumbnail_url = null;
 
     if (req.file) {
@@ -154,9 +163,11 @@ const createProject = async (req, res) => {
     let techStackJson = '[]';
     let tagArray = [];
     try {
-      techStackJson = JSON.stringify(Array.isArray(tech_stack) ? tech_stack : JSON.parse(tech_stack || '[]'));
+      const parsedTechStack = Array.isArray(tech_stack) ? tech_stack : JSON.parse(tech_stack || '[]');
+      techStackJson = JSON.stringify(parsedTechStack.map(t => xss(String(t))));
+      
       tagArray = Array.isArray(tags) ? tags : JSON.parse(tags || '[]');
-      tagArray = tagArray.slice(0, 20).map(t => String(t).trim().slice(0, 50)).filter(Boolean);
+      tagArray = tagArray.slice(0, 20).map(t => xss(String(t).trim()).slice(0, 50)).filter(Boolean);
     } catch (e) {
       console.warn('Invalid JSON in tech_stack or tags:', e.message);
     }
@@ -166,7 +177,7 @@ const createProject = async (req, res) => {
     const insertResult = await client.query(
       `INSERT INTO projects (user_id, title, description, thumbnail_url, github_url, demo_url, tech_stack, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.user.id, title, description, thumbnail_url, github_url || null, demo_url || null, techStackJson, status || 'published']
+      [req.user.id, safeTitle, safeDescription, thumbnail_url, safeGithubUrl, safeDemoUrl, techStackJson, safeStatus]
     );
 
     const project = insertResult.rows[0];
@@ -211,6 +222,14 @@ const updateProject = async (req, res) => {
     }
 
     const { title, description, github_url, demo_url, tech_stack, tags, status } = req.body;
+    
+    // Sanitize inputs
+    const safeTitle = title !== undefined ? xss(title) : project.title;
+    const safeDescription = description !== undefined ? xss(description) : project.description;
+    const safeGithubUrl = github_url !== undefined ? xss(github_url) : project.github_url;
+    const safeDemoUrl = demo_url !== undefined ? xss(demo_url) : project.demo_url;
+    const safeStatus = status !== undefined ? xss(status) : project.status;
+
     let thumbnail_url = project.thumbnail_url;
 
     if (req.file) {
@@ -228,11 +247,12 @@ const updateProject = async (req, res) => {
     let tagArray = [];
     try {
       if (tech_stack) {
-        techStackJson = JSON.stringify(Array.isArray(tech_stack) ? tech_stack : JSON.parse(tech_stack));
+        const parsedTechStack = Array.isArray(tech_stack) ? tech_stack : JSON.parse(tech_stack);
+        techStackJson = JSON.stringify(parsedTechStack.map(t => xss(String(t))));
       }
       if (tags !== undefined) {
         tagArray = Array.isArray(tags) ? tags : JSON.parse(tags || '[]');
-        tagArray = tagArray.slice(0, 20).map(t => String(t).trim().slice(0, 50)).filter(Boolean);
+        tagArray = tagArray.slice(0, 20).map(t => xss(String(t).trim()).slice(0, 50)).filter(Boolean);
       }
     } catch (e) {
       console.warn('Invalid JSON in tech_stack or tags:', e.message);
@@ -242,16 +262,16 @@ const updateProject = async (req, res) => {
 
     const updated = await client.query(
       `UPDATE projects
-       SET title = COALESCE($1, title),
-           description = COALESCE($2, description),
+       SET title = $1,
+           description = $2,
            thumbnail_url = $3,
-           github_url = COALESCE($4, github_url),
-           demo_url = COALESCE($5, demo_url),
+           github_url = $4,
+           demo_url = $5,
            tech_stack = $6,
-           status = COALESCE($7, status),
+           status = $7,
            updated_at = NOW()
        WHERE id = $8 RETURNING *`,
-      [title, description, thumbnail_url, github_url, demo_url, techStackJson, status, id]
+      [safeTitle, safeDescription, thumbnail_url, safeGithubUrl, safeDemoUrl, techStackJson, safeStatus, id]
     );
 
     if (tags !== undefined) {

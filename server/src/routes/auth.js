@@ -19,68 +19,15 @@ const {
 
 const router = express.Router();
 
-// ── Google OAuth — Student ────────────────────────────────────────────────────
-// Sets state='student' so the strategy knows to create a student account for new users
-router.get('/google/student', (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'student',
-    session: false,
-  })(req, res, next);
+// ── Asgardeo OIDC ─────────────────────────────────────────────────────────────
+// Initiates the OIDC login flow. The state can still carry the user's intended role.
+router.get('/oidc/login', (req, res, next) => {
+  req.query.state = req.query.state || 'login';
+  require('../controllers/authController').oidcLogin(req, res, next);
 });
 
-// ── Google OAuth — Recruiter ──────────────────────────────────────────────────
-router.get('/google/recruiter', (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'recruiter',
-    session: false,
-  })(req, res, next);
-});
-
-// ── Google OAuth — Login (existing users only, any role) ─────────────────────
-// Used from the login page. Does NOT create new accounts.
-router.get('/google/login', (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'login',
-    session: false,
-  })(req, res, next);
-});
-
-// ── Google OAuth — Admin (existing DB admin only) ─────────────────────────────
-// Step 1: POST /auth/admin/verify-key  → validates secret key, returns adminFlowToken
-// Step 2: GET  /auth/admin/google?t=TOKEN  → verifies token, initiates OAuth with state='admin'
-// Step 3: Google redirects to /auth/google/callback with state='admin'
-// The Passport strategy only succeeds if the Google account is already in DB with role='admin'
-
-router.post(
-  '/admin/verify-key',
-  [body('secretKey').trim().notEmpty().withMessage('Secret key is required.')],
-  validate,
-  validateAdminKey
-);
-
-router.get('/admin/google', requireAdminFlowToken, (req, res, next) => {
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: 'admin',
-    session: false,
-  })(req, res, next);
-});
-
-// ── Shared Google callback (all flows) ───────────────────────────────────────
-// All Google OAuth flows return here.  The `state` query param tells the callback
-// which flow it is and where to redirect on failure.
-router.get('/google/callback', (req, res, next) => {
-  passport.authenticate('google', { session: false }, (err, user, info) => {
-    if (err) return next(err);
-    // Attach user and authInfo to req for handleGoogleCallback
-    req.user = user || null;
-    req.authInfo = info || {};
-    next();
-  })(req, res, next);
-}, handleGoogleCallback);
+// OIDC callback
+router.get('/callback', require('../controllers/authController').oidcCallback);
 
 // General endpoints
 router.post('/refresh', refresh);

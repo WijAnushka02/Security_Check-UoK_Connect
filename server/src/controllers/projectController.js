@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const cloudinary = require('../config/cloudinary');
 const emitter = require('../events/eventEmitter');
+const xss = require('xss');
 
 // Init removed in favor of explicit migration script
 
@@ -139,6 +140,7 @@ const createProject = async (req, res) => {
   try {
     const { title, description, github_url, demo_url, tech_stack, tags, status } = req.body;
     let thumbnail_url = null;
+    const sanitizedDescription = xss(description);
 
     if (req.file) {
       const result = await new Promise((resolve, reject) => {
@@ -166,7 +168,7 @@ const createProject = async (req, res) => {
     const insertResult = await client.query(
       `INSERT INTO projects (user_id, title, description, thumbnail_url, github_url, demo_url, tech_stack, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.user.id, title, description, thumbnail_url, github_url || null, demo_url || null, techStackJson, status || 'published']
+      [req.user.id, title, sanitizedDescription, thumbnail_url, github_url || null, demo_url || null, techStackJson, status || 'published']
     );
 
     const project = insertResult.rows[0];
@@ -240,6 +242,8 @@ const updateProject = async (req, res) => {
 
     await client.query('BEGIN');
 
+    const sanitizedDescription = description ? xss(description) : undefined;
+
     const updated = await client.query(
       `UPDATE projects
        SET title = COALESCE($1, title),
@@ -251,7 +255,7 @@ const updateProject = async (req, res) => {
            status = COALESCE($7, status),
            updated_at = NOW()
        WHERE id = $8 RETURNING *`,
-      [title, description, thumbnail_url, github_url, demo_url, techStackJson, status, id]
+      [title, sanitizedDescription, thumbnail_url, github_url, demo_url, techStackJson, status, id]
     );
 
     if (tags !== undefined) {

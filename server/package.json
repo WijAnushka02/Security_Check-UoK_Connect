@@ -23,6 +23,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
     "express-validator": "^7.3.2",
     "file-type": "^16.5.4",
     "helmet": "^8.2.0",
@@ -30,10 +31,13 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
+    "openid-client": "^6.8.7",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.22.0",
-    "uuid": "^14.0.1"
+    "selfsigned": "^5.5.0",
+    "uuid": "^14.0.1",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

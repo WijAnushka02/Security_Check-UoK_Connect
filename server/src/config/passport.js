@@ -15,8 +15,9 @@ const emitter = require('../events/eventEmitter');
  * Admin accounts are NEVER auto-created here.
  * They are inserted directly via SQL (see scripts/create_admin.sql).
  */
-passport.use(
-  new GoogleStrategy(
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL) {
+  passport.use(
+    new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -106,8 +107,11 @@ passport.use(
         return done(err);
       }
     }
-  )
-);
+    )
+  );
+} else {
+  console.warn('Google OAuth is disabled: Google OAuth environment variables are incomplete.');
+}
 
 // Passport session serialise/deserialise (used only during the short OAuth redirect)
 passport.serializeUser((user, done) => done(null, user.id));

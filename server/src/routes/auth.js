@@ -1,5 +1,7 @@
 const express = require('express');
 const passport = require('passport');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');

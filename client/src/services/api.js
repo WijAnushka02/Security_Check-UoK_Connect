@@ -6,18 +6,48 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Holds the in-flight refresh request (if any) so concurrent 401s share
-// the same refresh call instead of racing each other. Using a shared
-// promise (rather than a boolean flag + queue) avoids the race where two
-// requests both see isRefreshing === false and both trigger a refresh.
+// Holds the in-flight refresh request (if any)
 let refreshPromise = null;
 
-// Request interceptor to attach token
-api.interceptors.request.use((config) => {
+// Holds the CSRF token
+let csrfToken = null;
+let csrfPromise = null;
+
+const fetchCsrfToken = () => {
+  if (!csrfPromise) {
+    csrfPromise = axios
+      .get(`${import.meta.env.VITE_API_URL || '/api'}/auth/csrf-token`, { withCredentials: true })
+      .then((res) => {
+        csrfToken = res.data.token;
+      })
+      .catch((err) => {
+        console.error('Failed to fetch CSRF token', err);
+      })
+      .finally(() => {
+        csrfPromise = null;
+      });
+  }
+  return csrfPromise;
+};
+
+// Request interceptor to attach token and CSRF
+api.interceptors.request.use(async (config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Attach CSRF token for state-changing requests
+  const method = (config.method || '').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (!csrfToken) {
+      await fetchCsrfToken();
+    }
+    if (csrfToken) {
+      config.headers['x-csrf-token'] = csrfToken;
+    }
+  }
+
   return config;
 });
 

@@ -1,4 +1,4 @@
-# Information Security Project
+# Securing UoK Connect: Integrating WSO2 Asgardeo & Mitigating OWASP Top 10 Vulnerabilities
 
 ## Overview
 
@@ -76,10 +76,3 @@ The authentication implementation correctly manages stateless session tokens and
 ## Security Testing
 
 The application has been tested to verify that the identified vulnerabilities have been thoroughly addressed. Secure HTTP-only cookies and OIDC state validation guarantee a highly secured API architecture.
-
-## Author
-
-**Anushka Dilinuwan Wijesinghe**
-
-BSc (Hons) in Software Engineering  
-University of Kelaniya

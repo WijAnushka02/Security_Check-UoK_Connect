@@ -1,34 +1,54 @@
-# Securing the Future: How I Fortified UOK Connect Against OWASP Vulnerabilities
+# Securing UoK Connect: Integrating WSO2 Asgardeo & Mitigating OWASP Top 10 Vulnerabilities
 
-As a Software Engineering student at the University of Kelaniya, I recently undertook the challenge of elevating a web development project—UOK Connect, a student project portal—into a secure, industry-standard application for my Information Security module.
+As part of the Information Security module at the University of Kelaniya, I embarked on a journey to harden **UoK Connect**, a Student Project Portal, against common web vulnerabilities. My goals were twofold: integrate a secure Cloud Identity Provider (IdP) for authentication and systematically address the OWASP Top 10 security risks.
 
-In this post, I’ll walk you through the journey of identifying and mitigating critical security flaws based on the OWASP Top 10, transforming a vulnerable portal into a highly secure, stateless API architecture.
+Here is a breakdown of my experience, the implementation strategies used, and the challenges faced during the process.
 
-## 1. Defeating CSRF (Cross-Site Request Forgery)
-**The Threat:** Our stateless API used JWTs stored in cookies. Without CSRF protections, attackers could trick authenticated users into making unwanted requests (like deleting a project) simply by visiting a malicious site.
-**The Solution:** I implemented the Double-Submit Cookie pattern using the `csrf-csrf` middleware. The server generates a unique CSRF token stored in a secure cookie, and the frontend (Axios) explicitly reads and sends it back via an `x-csrf-token` header for every mutating request.
+## 1. Authentication Integration: Moving to WSO2 Asgardeo (OIDC)
 
-## 2. Hardening Authentication & Sessions
-**The Threat:** If a session cookie is intercepted via an XSS attack or network sniffing, an attacker can hijack the account.
-**The Solution:** I strictly enforced the `SameSite=Strict`, `HttpOnly`, and `Secure` flags on all JWT cookies. Additionally, I implemented rigorous refresh token rotation, ensuring that old tokens are immediately invalidated if reused.
+Building custom login systems from scratch is notoriously risky. Instead of manually storing passwords and managing sessions, I delegated authentication to **WSO2 Asgardeo**, a powerful cloud-based Identity and Access Management (IAM) provider.
 
-## 3. Eradicating SQL Injection
-**The Threat:** Unsanitized database inputs can allow attackers to manipulate queries, bypassing authentication or dumping entire databases.
-**The Solution:** I conducted a full audit of all PostgreSQL queries in the backend. I ensured that 100% of the queries utilizing the `pg` library rely on strictly parameterized queries (e.g., `WHERE id = `) rather than template literals. Furthermore, dynamic sorting (like `ORDER BY`) is mapped explicitly against safe string lists.
+### Implementation Strategy
+I utilized the **OpenID Connect (OIDC)** protocol. 
+1. When a user (Student or Recruiter) attempts to log in, they are redirected to Asgardeo's securely hosted login page.
+2. Upon successful authentication, Asgardeo sends an authorization code back to my Express.js backend.
+3. The backend securely exchanges this code for an Access Token and fetches the user's profile information.
+4. Finally, the backend issues a local JWT (JSON Web Token) inside an `HttpOnly` cookie to seamlessly authenticate future API requests.
 
-## 4. Input Validation & XSS Mitigation
-**The Threat:** Stored XSS occurs when an attacker inputs malicious JavaScript into fields (like project descriptions or comments) which is then executed in the browsers of other users.
-**The Solution:** I integrated the `xss` library to aggressively strip out HTML/JS tags from all user-generated content prior to insertion into the database, neutralizing the threat before it ever persists.
+### Challenges Faced
+One major challenge was dealing with the OIDC `prompt=create` flag. I wanted users to jump directly to the registration page when they clicked "Register." However, Asgardeo restricts programmatic bypassing of the login screen for standard OIDC requests. I learned that Identity Providers strictly enforce their own user flows, and I had to adapt my frontend to align with Asgardeo's required User Onboarding configurations (like enabling Auto-Login after Registration).
 
-## 5. Security Misconfiguration & Headers
-**The Threat:** The server was exposing too much information and was vulnerable to clickjacking and MIME-sniffing.
-**The Solution:** Using `helmet`, I configured a strict Content Security Policy (CSP), enforced HTTP Strict Transport Security (HSTS), and explicitly denied iframe embedding. This drastically reduced the backend attack surface.
+## 2. Hardening Against the OWASP Top 10
 
-## 6. Hardening Identity Provider (IdP) Integration
-**The Threat:** The Google OAuth implementation utilized a static `state` parameter, opening the door to Login CSRF—where an attacker could force a victim to log into the attacker's account.
-**The Solution:** I engineered a custom anti-CSRF state validation mechanism. The server now generates a cryptographic nonce, embeds it into a signed JWT alongside the user role, and sets an `oauth_nonce` cookie. When Google returns the user, the strategy explicitly verifies the JWT and compares its nonce to the browser cookie, instantly rejecting any anomalies.
+To ensure UoK Connect was robust against modern threats, I systematically mitigated several OWASP Top 10 vulnerabilities:
 
-## Conclusion
-Security is not a feature; it's a foundation. Through this project, I transformed UOK Connect from a simple web application into a robust, secure platform ready to withstand real-world cyber threats.
+### Broken Access Control (A01:2021)
+**Risk:** Attackers might try to access unauthorized API endpoints or modify other users' projects.
+**Solution:** I implemented Express middleware (`requireAuth` and `requireRole`). The API validates the JWT on every protected request. Furthermore, ownership checks guarantee that a Student can only edit or delete their *own* project.
 
-*By Anushka Dilinuwan Wijesinghe*
+### Cryptographic Failures (A02:2021)
+**Risk:** Sensitive data transmitted in plaintext can be intercepted.
+**Solution:** The entire application (both Vite frontend and Node.js backend) is configured to run over **HTTPS**. The JWTs issued to the client are signed using a robust 256-bit secret key, ensuring they cannot be forged or tampered with.
+
+### Injection (A03:2021)
+**Risk:** Attackers could execute malicious SQL commands or inject JavaScript into the UI (XSS).
+**Solution:** 
+- **SQL Injection:** The backend utilizes the `pg` library with strictly **Parameterized Queries**. User inputs are never directly concatenated into SQL strings.
+- **XSS:** The frontend is built with React, which automatically escapes dynamic user input before rendering it to the DOM, rendering XSS payloads harmless.
+
+### Security Misconfiguration (A05:2021)
+**Risk:** Exposing database passwords or OIDC Client Secrets in the source code.
+**Solution:** I strictly utilized `.env` files to keep all sensitive credentials out of version control. I also created a `.env.example` file to securely document the required variables for deployment without exposing real keys.
+
+### Identification and Authentication Failures (A07:2021)
+**Risk:** Weak password policies or brute-force attacks on custom login endpoints.
+**Solution:** By delegating authentication to WSO2 Asgardeo, the application leverages enterprise-grade security features out-of-the-box, completely neutralizing local brute-force and credential stuffing threats.
+
+## 3. Learning Outcomes
+
+This project provided invaluable hands-on experience in secure web development. The most significant takeaway was understanding the complexity of Identity Federation. Integrating an external IdP via OIDC taught me that security is often about delegating responsibilities to specialized, hardened services rather than trying to build everything in-house.
+
+Additionally, mapping out the OWASP Top 10 vulnerabilities and actively mitigating them code-block by code-block transformed my approach to software engineering—security is no longer an afterthought, but a fundamental part of the design process.
+
+---
+*Source code and further details can be found on my GitHub repository:* [UoK Connect](https://github.com/WijAnushka02/Security_Check-UoK_Connect)

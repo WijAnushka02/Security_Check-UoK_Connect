@@ -7,13 +7,18 @@ erDiagram
 
     users {
         SERIAL      id             PK
-        VARCHAR255  google_id      UK  "NOT NULL"
+        VARCHAR255  google_id      UK  "nullable — legacy"
         VARCHAR255  name               "NOT NULL"
         VARCHAR255  email          UK  "NOT NULL"
         VARCHAR500  profile_pic
         VARCHAR20   role               "NOT NULL | CHECK: student|recruiter|admin | DEFAULT: student"
         VARCHAR50   student_id     UK  "nullable — students only"
         BOOLEAN     admin_verified     "NOT NULL | DEFAULT: false"
+        BOOLEAN     is_blocked         "NOT NULL | DEFAULT: false"
+        BOOLEAN     is_email_verified  "NOT NULL | DEFAULT: false"
+        VARCHAR64   verification_token
+        TIMESTAMP   verification_token_expires_at
+        VARCHAR255  oidc_subject   UK  "nullable — Asgardeo ID"
         TIMESTAMP   created_at         "NOT NULL | DEFAULT: NOW()"
         TIMESTAMP   updated_at         "NOT NULL | DEFAULT: NOW() | auto-updated by trigger"
     }

@@ -7,7 +7,7 @@ The Faculty of Computing requires a web application where students can showcase 
 The system should support three types of users:
 
 - **Students**
-  - Login using Google OAuth
+  - Login using WSO2 Asgardeo
   - Create, edit, and delete project posts
   - Upload a project thumbnail/image
   - View projects created by other students
@@ -25,9 +25,9 @@ The system should support three types of users:
 
 # Functional Requirements
 
-## 1. Authentication (Google OAuth)
+## 1. Authentication (WSO2 Asgardeo)
 
-Users must authenticate using **Google OAuth**.
+Users must authenticate using **WSO2 Asgardeo**.
 
 ### Required User Information
 - Name
@@ -129,7 +129,7 @@ Use one of the following:
 The frontend must demonstrate:
 
 - API Calls
-- Google Authentication Flow
+- WSO2 Asgardeo Authentication Flow
 - Form Validation
 - State Management
 
@@ -169,7 +169,7 @@ The backend must demonstrate:
 | Requirement Gathering | 10 |
 | Frontend UI | 10 |
 | REST API Design | 10 |
-| OAuth Implementation | 10 |
+| OIDC Implementation | 10 |
 | Event-Driven Architecture | 15 |
 | Database Design | 10 |
 | Security & Authorization | 10 |
@@ -193,7 +193,7 @@ The backend must demonstrate:
 ## Backend
 - Node.js
 - Express.js
-- Google OAuth (Passport.js)
+- WSO2 Asgardeo (OIDC)
 - EventEmitter
 - JWT Authentication
 

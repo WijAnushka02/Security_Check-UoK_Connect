@@ -1,3 +1,4 @@
+require('node:dns').setDefaultResultOrder('ipv4first');
 require('dotenv').config();
 require('./events/notificationHandler'); // register event listeners
 
@@ -37,11 +38,11 @@ app.use(helmet({
       frameAncestors: ["'none'"],
     },
   },
-  hsts: {
+  hsts: process.env.NODE_ENV === 'production' ? {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true,
-  },
+  } : false,
   noSniff: true,
   xssFilter: true,
   frameguard: { action: 'deny' },
@@ -129,8 +130,17 @@ app.use((err, req, res, next) => {
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`\n🚀 UOK Connect server running on http://localhost:${PORT}`);
+  const https = require('https');
+  const fs = require('fs');
+  const path = require('path');
+  
+  const options = {
+    pfx: fs.readFileSync(path.join(__dirname, '../certs/localhost.pfx')),
+    passphrase: 'secret'
+  };
+
+  https.createServer(options, app).listen(PORT, () => {
+    console.log(`\n🚀 UOK Connect server running on https://localhost:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 }

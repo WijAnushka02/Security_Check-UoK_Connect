@@ -1,21 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiArrowRight, FiCode, FiUsers, FiBriefcase, FiTrendingUp, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiArrowRight, FiCode, FiUsers, FiBriefcase, FiTrendingUp, FiEye } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import api from '../services/api';
-import useAuthStore from '../store/authStore';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
-
-const GoogleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-  </svg>
-);
 
 function StatCard({ icon: Icon, value, label, delay = 0 }) {
   return (
@@ -37,14 +27,7 @@ function StatCard({ icon: Icon, value, label, delay = 0 }) {
 }
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { fetchMe } = useAuthStore();
-  const [touched, setTouched] = useState({});
   const [stats, setStats] = useState({
     projects: 0,
     students: 0,
@@ -66,40 +49,14 @@ export default function LoginPage() {
     }).catch(() => {});
   }, []);
 
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  // Show errors redirected back from Google OAuth failure
   useEffect(() => {
     const err = searchParams.get('error');
-    if (err) toast.error(decodeURIComponent(err));
+    if (err) {
+      toast.error(decodeURIComponent(err));
+    }
   }, [searchParams]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setTouched({ email: true, password: true });
-    if (!emailValid || password.length < 1) return;
-    
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/login', { email, password });
-      await fetchMe();
-      toast.success('Welcome back!');
-      const currentUser = useAuthStore.getState().user;
-      if (currentUser?.role === 'recruiter') {
-        navigate('/projects', { replace: true });
-      } else if (currentUser?.role === 'admin') {
-        navigate('/admin/dashboard', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed. Check your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const isFormValid = emailValid && password.length >= 1;
+  const hasError = searchParams.get('error');
 
   return (
     <div className="h-screen flex">
@@ -169,10 +126,10 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[380px]"
+          className="w-full max-w-[380px] flex flex-col items-center text-center"
         >
           {/* Mobile logo */}
-          <Link to="/" className="lg:hidden flex items-center gap-2 mb-8">
+          <Link to="/" className="lg:hidden flex items-center justify-center gap-2 mb-8">
             <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M2 11 L7 3 L12 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -182,105 +139,47 @@ export default function LoginPage() {
             <span className="font-bold text-gray-900">UOK <span className="text-green-600">Connect</span></span>
           </Link>
 
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h2>
-          <p className="text-gray-500 text-sm mb-8">Sign in to your account to continue</p>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-                placeholder="you@example.com"
-                autoComplete="email"
-                autoFocus
-                className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-shadow ${
-                  touched.email && !emailValid
-                    ? 'border-red-300 bg-red-50 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-green-200 focus:border-green-400'
-                }`}
-              />
-              {touched.email && !emailValid && (
-                <p className="mt-1.5 text-xs text-red-500">Please enter a valid email address.</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className="w-full px-4 py-3 pr-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-400 transition-shadow"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                </button>
+          {!hasError ? (
+            <>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h2>
+              <p className="text-gray-500 text-sm mb-8">Sign in to your account to continue</p>
+              
+              <button
+                type="button"
+                onClick={() => (window.location.href = `${API_BASE}/auth/oidc/login?state=login`)}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-[#ff5000] hover:bg-[#e04600] text-white text-sm font-semibold transition-all duration-200 shadow-sm"
+              >
+                Log in with Asgardeo
+                <FiArrowRight size={16} />
+              </button>
+              
+              <p className="text-sm text-gray-500 mt-8">
+                Don't have an account?{' '}
+                <Link to="/auth/register" className="text-green-600 hover:text-green-700 font-semibold transition-colors">
+                  Register here
+                </Link>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6 text-2xl">
+                !
               </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={!isFormValid || isLoading}
-              className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 mt-2 ${
-                isFormValid && !isLoading
-                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm cursor-pointer'
-                  : 'bg-green-100 text-green-400 cursor-not-allowed'
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Signing in…
-                </>
-              ) : (
-                <>
-                  Sign In
-                  {isFormValid && <FiArrowRight size={15} />}
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-300">or continue with</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          {/* Google login — uses the 'login' flow (existing users only) */}
-          <button
-            type="button"
-            onClick={() => (window.location.href = `${API_BASE}/auth/google/login`)}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold transition-all duration-200 shadow-sm"
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
-
-          <p className="text-center text-sm text-gray-500 mt-8">
-            Don&apos;t have an account?{' '}
-            <Link to="/auth/register" className="text-green-600 hover:text-green-700 font-medium">
-              Register here
-            </Link>
-          </p>
-
-
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Authentication Failed</h2>
+              <p className="text-gray-500 text-sm mb-6">There was a problem signing you in securely.</p>
+              <button
+                type="button"
+                onClick={() => (window.location.href = `${API_BASE}/auth/oidc/login?state=login`)}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-[#ff5000] hover:bg-[#e04600] text-white text-sm font-semibold transition-all duration-200 shadow-sm mb-4"
+              >
+                Try Again with Asgardeo
+                <FiArrowRight size={16} />
+              </button>
+              <Link to="/" className="text-green-600 hover:text-green-700 font-medium text-sm">
+                Return to Home
+              </Link>
+            </>
+          )}
         </motion.div>
       </div>
     </div>

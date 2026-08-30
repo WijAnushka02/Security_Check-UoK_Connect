@@ -8,46 +8,123 @@ const { sendEmail } = require('../utils/email');
 
 // Init removed in favor of explicit migration script
 
-// ── Google OAuth callback (shared by all flows) ──────────────────────────────
-const handleGoogleCallback = async (req, res, next) => {
-  // Passport uses callback-style auth in the route, so req.user is set on success.
-  // On failure, req.user is undefined/false and req.authInfo has the reason.
-  const user = req.user;
-  const state = req.query?.state || '';
+const { getOIDCConfig, buildAuthorizationUrl, calculatePKCECodeChallenge, randomPKCECodeVerifier, randomState, authorizationCodeGrant, fetchUserInfo } = require('../utils/oidc');
 
-  if (!user) {
-    const message = req.authInfo?.message || 'Authentication failed.';
-    if (state === 'admin') {
-      return res.redirect(
-        `${process.env.CLIENT_URL}/admin/auth?error=${encodeURIComponent(message)}`
-      );
-    }
-    if (state === 'login') {
-      return res.redirect(
-        `${process.env.CLIENT_URL}/auth/login?error=${encodeURIComponent(message)}`
-      );
-    }
-    return res.redirect(
-      `${process.env.CLIENT_URL}/auth/error?message=${encodeURIComponent(message)}`
-    );
+// ── OIDC Initiator ──────────────────────────────────────────────────────────
+const oidcLogin = async (req, res, next) => {
+  try {
+    const config = await getOIDCConfig();
+    const code_verifier = randomPKCECodeVerifier();
+    const code_challenge = await calculatePKCECodeChallenge(code_verifier);
+    const state = req.query.state || 'login'; // Keep track of the role or login intent
+
+    let redirect_uri = process.env.ASGARDEO_CALLBACK_URL;
+    
+    // Build options for OIDC authorization URL
+    const authOptions = {
+      redirect_uri,
+      scope: 'openid profile email',
+      code_challenge,
+      code_challenge_method: 'S256',
+      state
+    };
+    
+    const url = buildAuthorizationUrl(config, authOptions);
+
+    // We store the code_verifier and state in a secure httpOnly cookie to verify it when they return
+    res.cookie('oidc_verifier', code_verifier, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 10 * 60 * 1000 });
+    res.cookie('oidc_state', state, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 10 * 60 * 1000 });
+
+    res.redirect(url.href);
+  } catch (err) {
+    next(err);
   }
+};
 
-  // Instead of setting cookies directly here, we generate a short-lived exchange token.
-  // This bypasses Safari ITP issues dropping cookies on cross-origin redirects.
-  const exchangeToken = jwt.sign({ id: user.id, role: user.role, student_id: user.student_id }, process.env.JWT_SECRET, {
-    expiresIn: '5m',
-    audience: 'oauth_exchange',
-  });
+// ── OIDC Callback ───────────────────────────────────────────────────────────
+const oidcCallback = async (req, res, next) => {
+  try {
+    const config = await getOIDCConfig();
+    
+    // Accurately construct the current URL to avoid trailing slash or path mismatches
+    const url = new URL(process.env.ASGARDEO_CALLBACK_URL);
+    if (req.originalUrl.includes('?')) {
+      url.search = req.originalUrl.split('?')[1];
+    }
 
-  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
-  res.clearCookie('oauth_nonce', {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax'
-  });
+    
+    const code_verifier = req.cookies.oidc_verifier;
+    const expectedState = req.cookies.oidc_state;
 
-  const redirectUrl = `${process.env.CLIENT_URL}/oauth-success?code=${exchangeToken}`;
-  return res.redirect(redirectUrl);
+    if (!code_verifier || !expectedState) {
+      throw new Error('Missing OIDC session verification cookies');
+    }
+
+    res.clearCookie('oidc_verifier');
+    res.clearCookie('oidc_state');
+
+    const redirect_uri = process.env.ASGARDEO_CALLBACK_URL;
+
+    const tokens = await authorizationCodeGrant(config, url, {
+      pkceCodeVerifier: code_verifier,
+      expectedState,
+    });
+
+    const userInfo = await fetchUserInfo(config, tokens.access_token, tokens.claims().sub);
+    const email = userInfo.email || userInfo.username;
+    
+    if (!email) {
+      throw new Error('Email address was not provided by Asgardeo. Please ensure your profile has an email address and you have granted permission to share it.');
+    }
+
+    const oidc_subject = tokens.claims().sub;
+    const name = userInfo.given_name ? `${userInfo.given_name} ${userInfo.family_name || ''}`.trim() : userInfo.name || email.split('@')[0];
+
+    // Check if user exists
+    let userResult = await pool.query('SELECT * FROM users WHERE oidc_subject = $1 OR email = $2', [oidc_subject, email]);
+    let user = userResult.rows[0];
+
+    if (!user) {
+      // Create user if they don't exist
+      const defaultRole = (expectedState === 'student' || expectedState === 'recruiter') ? expectedState : 'student';
+      const insertResult = await pool.query(
+        `INSERT INTO users (name, email, role, oidc_subject, is_email_verified)
+         VALUES ($1, $2, $3, $4, true) RETURNING *`,
+        [name, email, defaultRole, oidc_subject]
+      );
+      user = insertResult.rows[0];
+      emitter.emit('UserRegistered', { id: user.id, name, email, role: user.role });
+    } else if (!user.oidc_subject) {
+      // Link the OIDC subject if they logged in with the same email
+      await pool.query('UPDATE users SET oidc_subject = $1, is_email_verified = true WHERE id = $2', [oidc_subject, user.id]);
+      user.oidc_subject = oidc_subject;
+    }
+
+    // Instead of setting cookies directly here, we generate a short-lived exchange token.
+    // This bypasses Safari ITP issues dropping cookies on cross-origin redirects.
+    const exchangeToken = jwt.sign({ id: user.id, role: user.role, student_id: user.student_id }, process.env.JWT_SECRET, {
+      expiresIn: '5m',
+      audience: 'oauth_exchange',
+    });
+
+    const redirectUrl = `${process.env.CLIENT_URL}/oauth-success?code=${exchangeToken}`;
+    return res.redirect(redirectUrl);
+
+  } catch (err) {
+    console.error('[oidcCallback] Complete Error Object:', err);
+    if (err.response) {
+      console.error('[oidcCallback] Response Body:', await err.response.text().catch(() => 'No text'));
+    }
+    console.error('[oidcCallback]', err.message);
+    
+    let message = err.message || 'Authentication failed.';
+    if (err.cause) {
+      console.error('[oidcCallback] cause:', err.cause);
+      message += ` (Cause: ${err.cause.message || err.cause})`;
+    }
+    
+    return res.redirect(`${process.env.CLIENT_URL}/auth/error?message=${encodeURIComponent(message)}`);
+  }
 };
 
 // ── Admin: verify secret key, return a short-lived token ─────────────────────
@@ -92,15 +169,46 @@ const requireAdminFlowToken = (req, res, next) => {
 // ── Logout ───────────────────────────────────────────────────────────────────
 const logout = async (req, res) => {
   const refreshToken = req.cookies?.refreshToken;
+  let oidc_subject = null;
+  
   if (refreshToken) {
     try {
+      // Decode token just to check if the user is an OIDC user
+      try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET, { audience: 'refresh' });
+        const userRes = await pool.query('SELECT oidc_subject FROM users WHERE id = $1', [decoded.id]);
+        if (userRes.rows.length > 0) {
+          oidc_subject = userRes.rows[0].oidc_subject;
+        }
+      } catch (e) {
+        // Ignore jwt verify errors during logout
+      }
+      
       await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
     } catch (err) {
       console.error('[logout] token deletion error:', err.message);
     }
   }
+  
   clearTokenCookies(res);
-  res.json({ success: true, message: 'Logged out successfully.' });
+  
+  let logoutUrl = null;
+  if (oidc_subject) {
+    try {
+      const { getOIDCConfig, buildEndSessionUrl } = require('../utils/oidc');
+      const config = await getOIDCConfig();
+      // Use Asgardeo end-session endpoint to log the user out of the IDP too
+      const url = buildEndSessionUrl(config, {
+        post_logout_redirect_uri: process.env.CLIENT_URL,
+        client_id: process.env.ASGARDEO_CLIENT_ID
+      });
+      logoutUrl = url.href;
+    } catch (err) {
+      console.error('[logout] Failed to build OIDC logout url:', err.message);
+    }
+  }
+
+  res.json({ success: true, message: 'Logged out successfully.', logoutUrl });
 };
 
 // ── Get current user ─────────────────────────────────────────────────────────
@@ -217,7 +325,7 @@ const registerLocal = async (req, res) => {
     emitter.emit('UserRegistered', { id: newUser.id, name, email, role: newUser.role });
   } catch (err) {
     console.error('[registerLocal]', err.message);
-    res.status(500).json({ success: false, message: 'Server error.' });
+    res.status(500).json({ success: false, message: process.env.NODE_ENV !== 'production' ? err.message : 'Server error.' });
   }
 };
 
@@ -289,8 +397,11 @@ const loginLocal = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your account has been suspended.' });
     }
 
-    if (!user.is_email_verified) {
-      return res.status(403).json({ success: false, message: 'Please verify your email before logging in.' });
+    if (user.is_email_verified === false) {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ success: false, message: 'Please verify your email before logging in.' });
+      }
+      // In development, we simply ignore the unverified status and let you log in without updating the DB.
     }
 
     if (user.role === 'admin') {
@@ -316,7 +427,7 @@ const loginLocal = async (req, res) => {
     });
   } catch (err) {
     console.error('[loginLocal]', err.message);
-    res.status(500).json({ success: false, message: 'Server error.' });
+    res.status(500).json({ success: false, message: process.env.NODE_ENV !== 'production' ? err.message : 'Server error.' });
   }
 };
 
@@ -418,7 +529,8 @@ const exchangeOAuthCode = async (req, res) => {
 };
 
 module.exports = {
-  handleGoogleCallback,
+  oidcLogin,
+  oidcCallback,
   validateAdminKey,
   requireAdminFlowToken,
   logout,

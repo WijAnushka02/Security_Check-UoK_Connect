@@ -18,12 +18,23 @@ const useAuthStore = create((set) => ({
   },
 
   logout: async () => {
+    let logoutUrl = null;
     try {
-      await api.post('/auth/logout');
-    } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      set({ user: null });
+      const res = await api.post('/auth/logout');
+      if (res.data?.logoutUrl) {
+        logoutUrl = res.data.logoutUrl;
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    set({ user: null });
+    
+    if (logoutUrl) {
+      window.location.href = logoutUrl;
+    } else {
       window.location.href = '/';
     }
   },

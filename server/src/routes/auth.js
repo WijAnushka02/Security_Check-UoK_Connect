@@ -21,57 +21,15 @@ const {
 
 const router = express.Router();
 
-// ── Anti-CSRF Helper ──────────────────────────────────────────────────────────
-const startGoogleOAuth = (req, res, next, role) => {
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const stateToken = jwt.sign({ role, nonce }, process.env.JWT_SECRET, { expiresIn: '10m' });
-  
-  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
-  res.cookie('oauth_nonce', nonce, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax', // must be lax so it's sent on top-level navigation from Google
-    maxAge: 10 * 60 * 1000 // 10 minutes
-  });
+// ── Asgardeo OIDC ─────────────────────────────────────────────────────────────
+// Initiates the OIDC login flow. The state can still carry the user's intended role.
+router.get('/oidc/login', (req, res, next) => {
+  req.query.state = req.query.state || 'login';
+  require('../controllers/authController').oidcLogin(req, res, next);
+});
 
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    state: stateToken,
-    session: false,
-  })(req, res, next);
-};
-
-// ── Google OAuth — Student ────────────────────────────────────────────────────
-router.get('/google/student', (req, res, next) => startGoogleOAuth(req, res, next, 'student'));
-
-// ── Google OAuth — Recruiter ──────────────────────────────────────────────────
-router.get('/google/recruiter', (req, res, next) => startGoogleOAuth(req, res, next, 'recruiter'));
-
-// ── Google OAuth — Login (existing users only, any role) ─────────────────────
-router.get('/google/login', (req, res, next) => startGoogleOAuth(req, res, next, 'login'));
-
-// ── Google OAuth — Admin (existing DB admin only) ─────────────────────────────
-router.post(
-  '/admin/verify-key',
-  [body('secretKey').trim().notEmpty().withMessage('Secret key is required.')],
-  validate,
-  validateAdminKey
-);
-
-router.get('/admin/google', requireAdminFlowToken, (req, res, next) => startGoogleOAuth(req, res, next, 'admin'));
-
-// ── Shared Google callback (all flows) ───────────────────────────────────────
-// All Google OAuth flows return here.  The `state` query param tells the callback
-// which flow it is and where to redirect on failure.
-router.get('/google/callback', (req, res, next) => {
-  passport.authenticate('google', { session: false }, (err, user, info) => {
-    if (err) return next(err);
-    // Attach user and authInfo to req for handleGoogleCallback
-    req.user = user || null;
-    req.authInfo = info || {};
-    next();
-  })(req, res, next);
-}, handleGoogleCallback);
+// OIDC callback
+router.get('/callback', require('../controllers/authController').oidcCallback);
 
 // General endpoints
 router.post('/refresh', refresh);

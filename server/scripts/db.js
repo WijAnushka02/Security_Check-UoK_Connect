@@ -44,6 +44,7 @@ const setupDb = async () => {
         is_email_verified BOOLEAN    NOT NULL DEFAULT FALSE,
         verification_token VARCHAR(64),
         verification_token_expires_at TIMESTAMP,
+        oidc_subject   VARCHAR(255)  UNIQUE,
         created_at     TIMESTAMP     NOT NULL DEFAULT NOW(),
         updated_at     TIMESTAMP     NOT NULL DEFAULT NOW()
       );

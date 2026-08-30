@@ -17,78 +17,11 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// Password strength checker
-function usePasswordStrength(password) {
-  const checks = [
-    { label: 'At least 8 characters', pass: password.length >= 8 },
-    { label: 'One uppercase letter', pass: /[A-Z]/.test(password) },
-    { label: 'One number', pass: /[0-9]/.test(password) },
-  ];
-  const score = checks.filter((c) => c.pass).length;
-  return { checks, score, isStrong: score === checks.length };
-}
+// Registration page
 
 export default function RegisterPage() {
   const [role, setRole] = useState('student');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [studentId, setStudentId] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
-  const [touched, setTouched] = useState({});
-  const navigate = useNavigate();
-  const { fetchMe } = useAuthStore();
-  const { checks: pwChecks, isStrong: pwStrong } = usePasswordStrength(password);
-
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
-  const studentIdValid = role !== 'student' || /^[A-Za-z0-9/\-]{3,20}$/.test(studentId.trim());
-
-  const isFormValid =
-    name.trim().length > 0 &&
-    emailValid &&
-    pwStrong &&
-    passwordsMatch &&
-    studentIdValid;
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setTouched({ name: true, email: true, password: true, confirmPassword: true, studentId: true });
-    if (!isFormValid) return;
-
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/register', {
-        name: name.trim(),
-        email,
-        password,
-        role,
-        student_id: role === 'student' ? studentId.trim() : undefined,
-      });
-
-      if (res.data.requireVerification) {
-        setRegistrationSuccess(true);
-      } else {
-        await fetchMe();
-        toast.success('Account created successfully!');
-        if (role === 'recruiter') {
-          navigate('/projects', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const mark = (field) => () => setTouched((t) => ({ ...t, [field]: true }));
 
   return (
     <div className="min-h-screen flex">
@@ -185,23 +118,6 @@ export default function RegisterPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-1">Create account</h2>
           <p className="text-gray-500 text-sm mb-6">Choose your role to get started</p>
 
-          {registrationSuccess ? (
-            <div className="text-center py-10">
-              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiCheck size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Check your email</h3>
-              <p className="text-gray-500 mb-6">
-                We've sent a verification link to <span className="font-semibold text-gray-900">{email}</span>. 
-                Please verify your email address to activate your account.
-              </p>
-              <Link to="/auth/login" className="inline-block px-6 py-2.5 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 transition-colors">
-                Go to Login
-              </Link>
-            </div>
-          ) : (
-            <>
-
           {/* Role selector */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             {[
@@ -211,7 +127,7 @@ export default function RegisterPage() {
               <button
                 key={value}
                 type="button"
-                onClick={() => { setRole(value); setStudentId(''); }}
+                onClick={() => setRole(value)}
                 className={`flex flex-col items-center gap-1.5 py-4 px-3 rounded-xl border-2 text-center transition-all ${
                   role === value
                     ? 'border-green-500 bg-green-50 text-green-700'
@@ -225,187 +141,16 @@ export default function RegisterPage() {
             ))}
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleRegister} className="space-y-3" noValidate>
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={mark('name')}
-                placeholder="John Doe"
-                autoComplete="name"
-                className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-shadow ${
-                  touched.name && !name.trim()
-                    ? 'border-red-300 bg-red-50 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-green-200 focus:border-green-400'
-                }`}
-              />
-              {touched.name && !name.trim() && (
-                <p className="mt-1 text-xs text-red-500">Full name is required.</p>
-              )}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onBlur={mark('email')}
-                placeholder="you@example.com"
-                autoComplete="email"
-                className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-shadow ${
-                  touched.email && !emailValid
-                    ? 'border-red-300 bg-red-50 focus:ring-red-200'
-                    : 'border-gray-200 focus:ring-green-200 focus:border-green-400'
-                }`}
-              />
-              {touched.email && !emailValid && (
-                <p className="mt-1 text-xs text-red-500">Enter a valid email address.</p>
-              )}
-            </div>
-
-            {/* Student ID (students only) */}
-            <AnimatePresence>
-              {role === 'student' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                  <input
-                    type="text"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                    onBlur={mark('studentId')}
-                    placeholder="e.g. 2020/CS/001"
-                    className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-shadow ${
-                      touched.studentId && !studentIdValid
-                        ? 'border-red-300 bg-red-50 focus:ring-red-200'
-                        : 'border-gray-200 focus:ring-green-200 focus:border-green-400'
-                    }`}
-                  />
-                  {touched.studentId && !studentIdValid && (
-                    <p className="mt-1 text-xs text-red-500">Invalid format (e.g. 2020/CS/001).</p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onBlur={mark('password')}
-                  placeholder="Min 8 chars, 1 uppercase, 1 number"
-                  autoComplete="new-password"
-                  className="w-full px-4 py-2.5 pr-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-400 transition-shadow"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <FiEyeOff size={15} /> : <FiEye size={15} />}
-                </button>
-              </div>
-              {/* Strength indicators */}
-              {(touched.password || password.length > 0) && (
-                <div className="mt-2 space-y-1">
-                  {pwChecks.map((c) => (
-                    <div key={c.label} className="flex items-center gap-1.5">
-                      {c.pass
-                        ? <FiCheck size={11} className="text-green-500 flex-shrink-0" />
-                        : <FiX size={11} className="text-gray-300 flex-shrink-0" />}
-                      <span className={`text-xs ${c.pass ? 'text-green-600' : 'text-gray-400'}`}>{c.label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Confirm password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-              <div className="relative">
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  onBlur={mark('confirmPassword')}
-                  placeholder="Re-enter your password"
-                  autoComplete="new-password"
-                  className={`w-full px-4 py-2.5 pr-11 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-shadow ${
-                    touched.confirmPassword && confirmPassword && !passwordsMatch
-                      ? 'border-red-300 bg-red-50 focus:ring-red-200'
-                      : 'border-gray-200 focus:ring-green-200 focus:border-green-400'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                >
-                  {showConfirm ? <FiEyeOff size={15} /> : <FiEye size={15} />}
-                </button>
-              </div>
-              {touched.confirmPassword && confirmPassword && !passwordsMatch && (
-                <p className="mt-1 text-xs text-red-500">Passwords do not match.</p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={!isFormValid || isLoading}
-              className={`w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 mt-1 ${
-                isFormValid && !isLoading
-                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm cursor-pointer'
-                  : 'bg-green-100 text-green-400 cursor-not-allowed'
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Creating account…
-                </>
-              ) : (
-                <>
-                  Create Account
-                  {isFormValid && <FiArrowRight size={15} />}
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-300">or sign up with</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          {/* Google register — passes the selected role as state */}
+          {/* Asgardeo Registration */}
           <button
             type="button"
             onClick={() =>
-              (window.location.href = `${API_BASE}/auth/google/${role}`)
+              (window.location.href = `${API_BASE}/auth/oidc/login?state=${role}`)
             }
-            className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-semibold transition-all duration-200 shadow-sm"
+            className="w-full flex items-center justify-center gap-2.5 py-4 mt-6 rounded-xl bg-[#ff5000] hover:bg-[#e04600] text-white text-sm font-semibold transition-all duration-200 shadow-sm"
           >
-            <GoogleIcon />
-            Continue with Google as {role === 'student' ? 'Student' : 'Recruiter'}
+            Register with Asgardeo as {role === 'student' ? 'Student' : 'Recruiter'}
+            <FiArrowRight size={16} />
           </button>
 
           <p className="text-center text-sm text-gray-500 mt-5">
@@ -414,8 +159,6 @@ export default function RegisterPage() {
               Log in
             </Link>
           </p>
-          </>
-          )}
         </motion.div>
       </div>
     </div>
